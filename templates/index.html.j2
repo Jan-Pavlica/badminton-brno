@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Badminton Brno — volné kapacity</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      margin: 0;
+      padding: 1.5rem;
+      background: #f4f5f7;
+      color: #222;
+    }
+    h1 { margin: 0 0 .25rem; font-size: 1.5rem; }
+    h2 { margin: 1.75rem 0 .5rem; font-size: 1rem; color: #555; font-weight: 600; }
+    .meta { color: #666; font-size: .85rem; margin-bottom: 1rem; }
+    .meta a { color: #444; }
+
+    .venues { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; align-items: center; }
+    .venues .label { color: #555; font-size: .85rem; }
+    .venue-pill {
+      padding: .25rem .65rem;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #1a5f1a;
+      font-size: .85rem;
+      cursor: pointer;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      color: #1a5f1a;
+      font-weight: 600;
+    }
+    .venue-pill:hover { background: #f3faf3; }
+    .venue-pill.disabled {
+      background: #f0f0f0;
+      border-color: #ccc;
+      color: #888;
+      font-weight: normal;
+    }
+    .venue-pill.disabled:hover { background: #e8e8e8; }
+    .venue-pill.disabled .pill-check::before { content: '○'; }
+    .venue-pill .pill-check::before { content: '●'; }
+    .venue-pill .pill-check { font-size: .7rem; }
+    .venue-pill.error { background: #fee; border-color: #f99; color: #900; }
+    .venue-pill.error.disabled { background: #f5e8e8; color: #b66; }
+    .pill-link {
+      color: inherit;
+      opacity: .55;
+      text-decoration: none;
+      font-size: .9em;
+      margin-left: .2rem;
+    }
+    .pill-link:hover { opacity: 1; }
+
+    .duration-toggle {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+      font-size: .85rem;
+    }
+    .duration-toggle .label { color: #555; }
+    .duration-toggle .btn {
+      padding: .35rem .85rem;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .85rem;
+      color: #333;
+    }
+    .duration-toggle .btn:hover { background: #f0f0f0; }
+    .duration-toggle .btn.active {
+      background: #1a5f1a;
+      border-color: #1a5f1a;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .week-table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 1100px;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .week-table th,
+    .week-table td {
+      border: 1px solid #d8d8d8;
+      padding: 4px 6px;
+      text-align: center;
+      height: 26px;
+      font-size: .85rem;
+    }
+    .week-table thead th {
+      background: #eef0f3;
+      font-weight: 600;
+      padding: 8px 6px;
+    }
+    .week-table thead th small { color: #777; font-weight: normal; }
+    .week-table tbody th.time {
+      background: #fafbfc;
+      color: #666;
+      font-weight: normal;
+      font-variant-numeric: tabular-nums;
+      width: 70px;
+      font-size: .8rem;
+    }
+    .week-table tbody tr.hour-mark th,
+    .week-table tbody tr.hour-mark td {
+      border-top: 2px solid #c8c8c8;
+    }
+
+    .week-table td.has {
+      background: #d8f0d8;
+      position: relative;
+      cursor: default;
+      font-weight: 600;
+      color: #1a5f1a;
+    }
+    .week-table td.has:hover { background: #b8e6b8; }
+    .week-table td.none { background: #fadcdc; }
+
+    .popover {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      border: 1px solid #888;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+      padding: .55rem .75rem;
+      z-index: 50;
+      white-space: normal;          /* dlouhé záznamy zalomit */
+      text-align: left;
+      font-weight: normal;
+      color: #222;
+      font-size: .85rem;
+      width: max-content;           /* drží těsně podle obsahu */
+      max-width: 320px;
+    }
+    .week-table td.has:hover .popover { display: block; }
+    .popover-title {
+      font-weight: 600;
+      margin-bottom: .35rem;
+      color: #444;
+      font-size: .8rem;
+      white-space: nowrap;
+    }
+    .popover-line { margin: .2rem 0; line-height: 1.4; }
+    .popover-line a { color: #0a66cc; text-decoration: none; font-weight: 600; }
+    .popover-line a:hover { text-decoration: underline; }
+    .popover-courts { color: #555; }
+
+    /* JS po :hover doplní třídy, aby popover nepřetekl viewport */
+    .popover.shift-left  { left: auto; right: 0;    transform: none; }
+    .popover.shift-right { left: 0;    right: auto; transform: none; }
+    .popover.flip-up     { top: auto;  bottom: 100%; }
+
+    .table-wrap { padding-bottom: 320px; }
+
+    footer { margin-top: 2rem; color: #888; font-size: .75rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Badminton Brno — volné kapacity</h1>
+  <div class="meta">
+    Aktualizováno {{ scraped_at_human }} · <a href="data/slots.json">JSON</a>
+  </div>
+
+  <div class="venues" id="venues-filter">
+    <span class="label">Sportoviště:</span>
+    {% for v in venues_meta %}
+      <span class="venue-pill {% if v.error %}error{% endif %}"
+            data-venue-name="{{ v.venue_name }}"
+            title="{{ v.error or 'Klikni pro zobrazení/skrytí ve filtru' }}">
+        <span class="pill-check" aria-hidden="true"></span>
+        <span class="pill-name">{{ v.venue_name }}</span>
+        {% if v.error %}<span aria-label="chyba">⚠</span>{% endif %}
+        <a class="pill-link" href="{{ v.venue_url }}" target="_blank" rel="noopener noreferrer"
+           title="Otevřít stránku sportoviště">↗</a>
+      </span>
+    {% endfor %}
+  </div>
+
+  <div class="duration-toggle" role="radiogroup" aria-label="Délka rezervace">
+    <span class="label">Délka rezervace:</span>
+    <button type="button" class="btn" data-duration="30">30 min</button>
+    <button type="button" class="btn active" data-duration="60">60 min</button>
+    <button type="button" class="btn" data-duration="90">90 min</button>
+    <button type="button" class="btn" data-duration="120">120 min</button>
+  </div>
+
+  <div class="table-wrap" id="weeks-container"></div>
+
+  <footer>
+    Najetím na zelenou buňku zobrazíte volné kurty a proklik na rezervaci.
+  </footer>
+
+  <script>
+    const AVAILABILITY = {{ availability | tojson }};
+    const WEEKS = {{ weeks | tojson }};
+    const DAY_START_HOUR = {{ day_start_hour }};
+    const DAY_END_HOUR = {{ day_end_hour }};
+    const SLOT_MINUTES = {{ slot_minutes }};
+    const CLOSE_MINUTE = DAY_END_HOUR * 60;
+    const STORAGE_KEY = 'badminton-brno:disabledVenues';
+    const SELECTED_VENUES = new Set();   // venue_name, pouze aktivní
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => (
+        {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+      ));
+    }
+
+    function bookableAt(dayIso, startMin, durationMin) {
+      // pro každé (venue, kurt) zjisti, jestli má volné všechny 30min sloty
+      // v intervalu [startMin, startMin+durationMin)
+      const required = [];
+      for (let m = startMin; m < startMin + durationMin; m += SLOT_MINUTES) {
+        required.push(m);
+      }
+      const dayData = AVAILABILITY[dayIso] || {};
+      const venues = [];
+      let totalCourts = 0;
+      const venueNames = Object.keys(dayData).filter(n => SELECTED_VENUES.has(n)).sort();
+      for (const name of venueNames) {
+        const v = dayData[name];
+        const bookable = [];
+        for (const court of Object.keys(v.courts)) {
+          const set = new Set(v.courts[court]);
+          let ok = true;
+          for (const m of required) {
+            if (!set.has(m)) { ok = false; break; }
+          }
+          if (ok) bookable.push(court);
+        }
+        if (bookable.length) {
+          venues.push({ name, courts: bookable, url: v.url });
+          totalCourts += bookable.length;
+        }
+      }
+      return { totalCourts, venues };
+    }
+
+    function renderWeek(weekDays, durationMin) {
+      let html = '';
+      html += '<h2>' + esc(weekDays[0].full) + ' – ' + esc(weekDays[weekDays.length-1].full) + '</h2>';
+      html += '<table class="week-table"><thead><tr><th></th>';
+      for (const day of weekDays) {
+        html += '<th>' + esc(day.weekday) + '<br><small>' + esc(day.short) + '</small></th>';
+      }
+      html += '</tr></thead><tbody>';
+
+      for (let hour = DAY_START_HOUR; hour < DAY_END_HOUR; hour++) {
+        for (const minute of [0, 30]) {
+          const startMin = hour * 60 + minute;
+          const label = String(hour).padStart(2,'0') + ':' + String(minute).padStart(2,'0');
+          const isHourMark = (minute === 0);
+          html += '<tr' + (isHourMark ? ' class="hour-mark"' : '') + '>';
+          html += '<th class="time">' + label + '</th>';
+
+          // pokud by booking přesáhl zavírací dobu, vždy red
+          const fits = (startMin + durationMin <= CLOSE_MINUTE);
+
+          for (const day of weekDays) {
+            let cell = { totalCourts: 0, venues: [] };
+            if (fits) cell = bookableAt(day.iso, startMin, durationMin);
+
+            if (cell.totalCourts > 0) {
+              const endMin = startMin + durationMin;
+              const endLabel = String(Math.floor(endMin/60)).padStart(2,'0') + ':' + String(endMin%60).padStart(2,'0');
+              html += '<td class="has">' + cell.totalCourts;
+              html += '<div class="popover">';
+              html += '<div class="popover-title">' + esc(day.weekday) + ' ' + esc(day.full) + ' · ' + label + '–' + endLabel + '</div>';
+              for (const v of cell.venues) {
+                html += '<div class="popover-line">';
+                html += '<a href="' + esc(v.url) + '" target="_blank" rel="noopener noreferrer">' + esc(v.name) + '</a>';
+                html += '<span class="popover-courts"> — ' + esc(v.courts.join(', ')) + '</span>';
+                html += '</div>';
+              }
+              html += '</div></td>';
+            } else {
+              html += '<td class="none"></td>';
+            }
+          }
+          html += '</tr>';
+        }
+      }
+      html += '</tbody></table>';
+      return html;
+    }
+
+    function render(durationMin) {
+      const container = document.getElementById('weeks-container');
+      let html = '';
+      for (const weekDays of WEEKS) {
+        html += renderWeek(weekDays, durationMin);
+      }
+      container.innerHTML = html;
+    }
+
+    function positionPopover(cell) {
+      if (cell._positioned) return;
+      const popover = cell.querySelector('.popover');
+      if (!popover) return;
+      popover.classList.remove('shift-left', 'shift-right', 'flip-up');
+      void popover.offsetWidth;   // force reflow s default pozicí
+      const r = popover.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const pad = 8;
+      if (r.right > vw - pad) popover.classList.add('shift-left');
+      else if (r.left < pad) popover.classList.add('shift-right');
+      // přeměřit po horizontálním posunu — výška se nemění, ale je-li blízko paty obrazovky, flipnout nahoru
+      const r2 = popover.getBoundingClientRect();
+      if (r2.bottom > vh - pad) popover.classList.add('flip-up');
+      cell._positioned = true;
+    }
+
+    function loadDisabledVenues() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return new Set();
+        const arr = JSON.parse(raw);
+        return new Set(Array.isArray(arr) ? arr : []);
+      } catch (e) {
+        return new Set();
+      }
+    }
+    function saveDisabledVenues(disabled) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...disabled])); }
+      catch (e) { /* ignore (private mode, etc.) */ }
+    }
+
+    function rerender() {
+      const active = document.querySelector('.duration-toggle .btn.active');
+      render(parseInt(active.dataset.duration, 10));
+    }
+
+    function initVenueFilter() {
+      const pills = document.querySelectorAll('#venues-filter .venue-pill');
+      const disabled = loadDisabledVenues();
+      pills.forEach(pill => {
+        const name = pill.dataset.venueName;
+        if (disabled.has(name)) pill.classList.add('disabled');
+        else SELECTED_VENUES.add(name);
+
+        pill.addEventListener('click', (e) => {
+          // klik na ↗ link nesmí togglovat filtr
+          if (e.target.closest('.pill-link')) return;
+          pill.classList.toggle('disabled');
+          if (pill.classList.contains('disabled')) {
+            SELECTED_VENUES.delete(name);
+            disabled.add(name);
+          } else {
+            SELECTED_VENUES.add(name);
+            disabled.delete(name);
+          }
+          saveDisabledVenues(disabled);
+          rerender();
+        });
+      });
+    }
+
+    function init() {
+      initVenueFilter();
+
+      const buttons = document.querySelectorAll('.duration-toggle .btn');
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          buttons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          rerender();
+        });
+      });
+      rerender();
+
+      // dynamické pozicování popoveru po každém hoveru
+      const container = document.getElementById('weeks-container');
+      container.addEventListener('mouseover', (e) => {
+        const cell = e.target.closest('td.has');
+        if (cell) positionPopover(cell);
+      });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>

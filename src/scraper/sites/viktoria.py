@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import date, datetime, time, timedelta, timezone
 
 from playwright.async_api import async_playwright
@@ -8,10 +9,13 @@ from playwright.async_api import async_playwright
 from ..base import BaseScraper
 from ..models import ScrapeResult, Slot
 
+log = logging.getLogger(__name__)
+
 BASE_URL = "https://rezervace.centrumviktoria.cz:18443/timeline/day"
 BADMINTON_CLASS = "c_08"   # CSS třída span.activity pro badminton
 SLOT_MINUTES = 30
-PARALLELISM = 3   # paralelní záložky v jednom contextu
+PARALLELISM = 2   # méně agresivní paralelismus — Viktoria občas vrací neúplnou stránku
+MAX_RETRIES = 3
 
 
 class CentrumViktoriaScraper(BaseScraper):
@@ -43,25 +47,50 @@ class CentrumViktoriaScraper(BaseScraper):
             try:
                 sem = asyncio.Semaphore(PARALLELISM)
 
-                async def fetch_one(day: date) -> list[Slot] | Exception:
+                async def fetch_once(day: date) -> list[Slot]:
+                    """Jeden pokus — vyhodí výjimku při selhání."""
+                    page = await ctx.new_page()
+                    try:
+                        ts = self._noon_ms(day)
+                        url = f"{BASE_URL}?criteriaTimestamp={ts}"
+                        resp = await page.goto(url, wait_until="networkidle", timeout=25000)
+                        if resp and resp.status >= 400:
+                            raise RuntimeError(f"HTTP {resp.status} for {url}")
+                        # počkáme dokud nejsou v DOM badmintonové kurty (sidebar)
+                        await page.wait_for_function(
+                            "() => document.querySelectorAll('li.activity.c_08, .activity.c_08').length > 0",
+                            timeout=15000,
+                        )
+                        # a dokud se nevyrenderuje schedule grid (alespoň jedna anchor s reservationStartTime)
+                        await page.wait_for_function(
+                            "() => document.querySelectorAll('a[href*=reservationStartTime]').length > 0",
+                            timeout=15000,
+                        )
+                        return self._build_slots(await self._extract(page), day)
+                    finally:
+                        await page.close()
+
+                async def fetch_with_retry(day: date) -> list[Slot] | Exception:
                     async with sem:
-                        page = await ctx.new_page()
-                        try:
-                            ts = self._noon_ms(day)
-                            url = f"{BASE_URL}?criteriaTimestamp={ts}"
-                            resp = await page.goto(url, wait_until="networkidle", timeout=25000)
-                            if resp and resp.status >= 400:
-                                return RuntimeError(f"HTTP {resp.status} for {url}")
-                            await page.wait_for_selector("li.activity, .activity", timeout=10000)
-                            data = await self._extract(page)
-                            return self._build_slots(data, day)
-                        except Exception as e:
-                            return e
-                        finally:
-                            await page.close()
+                        last_exc: Exception | None = None
+                        for attempt in range(1, MAX_RETRIES + 1):
+                            try:
+                                slots = await fetch_once(day)
+                                if not slots and attempt < MAX_RETRIES:
+                                    # prázdné výsledky často znamenají, že stránka ještě nedoběhla
+                                    log.warning("viktoria %s attempt %d: 0 slots, retrying", day, attempt)
+                                    await asyncio.sleep(2)
+                                    continue
+                                return slots
+                            except Exception as e:
+                                last_exc = e
+                                log.warning("viktoria %s attempt %d failed: %s", day, attempt, e)
+                                if attempt < MAX_RETRIES:
+                                    await asyncio.sleep(2)
+                        return last_exc or RuntimeError("unknown failure")
 
                 results = await asyncio.gather(
-                    *(fetch_one(start_date + timedelta(days=i)) for i in range(days))
+                    *(fetch_with_retry(start_date + timedelta(days=i)) for i in range(days))
                 )
                 errors: list[str] = []
                 for r in results:
@@ -69,6 +98,8 @@ class CentrumViktoriaScraper(BaseScraper):
                         errors.append(f"{type(r).__name__}: {r}")
                     else:
                         slots.extend(r)
+                if errors:
+                    log.warning("viktoria: %d days failed: %s", len(errors), errors[:3])
             finally:
                 await browser.close()
 

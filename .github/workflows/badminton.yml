@@ -2,14 +2,14 @@ name: scrape-and-deploy
 
 on:
   schedule:
-    - cron: "*/15 * * * *"   # každých 15 min — nejpoužívanější pattern, GH ho zaregistruje spolehlivě
+    - cron: "7/15 * * * *"   # každých 15 min, posunuté mimo začátek hodiny kvůli GH Actions špičkám
   workflow_dispatch:           # manuální spuštění z UI pro testy
   push:
     branches: [main]
     paths:
       - "src/**"
       - "templates/**"
-      - ".github/workflows/scrape.yml"
+      - ".github/workflows/badminton.yml"
 
 # Pouze jeden běh najednou — když cron přijde dřív, než předchozí dojede, počká
 concurrency:

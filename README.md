@@ -1,7 +1,7 @@
 # Badminton Brno — přehled volných kapacit
 
 Statický web s dvoutýdenním přehledem volných slotů na badmintonových kurtech v Brně.
-Data se obnovují každých 10 minut přes GitHub Actions a publikují na GitHub Pages.
+Data se obnovují zhruba každých 15 minut přes GitHub Actions a publikují na GitHub Pages.
 
 Rozsah okna se řídí konstantou `DAYS` v `src/scraper/main.py`. Scrapery sportovišť, která veřejně
 zobrazují jen jeden týden (memberzone, sportkuklenska), si na další týden samy nakliknou.
@@ -75,8 +75,8 @@ Pokud scraper hodí výjimku nebo překročí `timeout_seconds`, `BaseScraper.ru
 
 ## Deployment
 
-GitHub Actions workflow `.github/workflows/scrape.yml`:
-- spouští se `*/10 * * * *` (každých 10 min — GitHub může v peaku zpozdit o 5–15 min)
+GitHub Actions workflow `.github/workflows/badminton.yml`:
+- spouští se `7/15 * * * *` (každých 15 min, mimo začátek hodiny — GitHub může v peaku zpozdit nebo dropnout běh)
 - také na `workflow_dispatch` (manuál) a `push` do `main` (po změně kódu)
 - buildí `site/` a force-pushe na branch `gh-pages` přes `peaceiris/actions-gh-pages`
 - výstup: `https://<user>.github.io/<repo>/`

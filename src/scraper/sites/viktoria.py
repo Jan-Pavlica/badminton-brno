@@ -104,13 +104,19 @@ class CentrumViktoriaScraper(BaseScraper):
                         });
                     }
                 });
-                // všechny anchory s reservationStartTime
+                // anchory pro VOLNÉ sloty — TD musí mít třídu can_book.
+                // can_book_substitute znamená "obsazeno, ale můžeš jako náhradník" — NEbereme.
                 const slots = [];
                 document.querySelectorAll('a.book, a.ajax_popup_trigger').forEach(a => {
                     const href = a.getAttribute('href') || '';
                     const obj = href.match(/objectId\/([a-f0-9]+)/)?.[1];
                     const t = href.match(/reservationStartTime\/([0-9T:.+-]+)/)?.[1];
-                    if (obj && t) slots.push({ obj, t });
+                    if (!obj || !t) return;
+                    const td = a.closest('td');
+                    if (!td) return;
+                    const classes = (td.className || '').split(/\s+/).filter(Boolean);
+                    if (!classes.includes('can_book')) return;
+                    slots.push({ obj, t });
                 });
                 return { courts, slots };
             }"""

@@ -125,6 +125,11 @@
     }
     .week-table td.has:hover { background: #b8e6b8; }
     .week-table td.none { background: #fadcdc; }
+    .week-table td.past {
+      background: #ececec;
+      color: #b0b0b0;
+      cursor: default;
+    }
 
     .popover {
       display: none;
@@ -250,6 +255,7 @@
     }
 
     function renderWeek(weekDays, durationMin) {
+      const now = new Date();
       let html = '';
       html += '<h2>' + esc(weekDays[0].full) + ' – ' + esc(weekDays[weekDays.length-1].full) + '</h2>';
       html += '<table class="week-table"><thead><tr><th></th>';
@@ -270,6 +276,16 @@
           const fits = (startMin + durationMin <= CLOSE_MINUTE);
 
           for (const day of weekDays) {
+            // konstrukt lokálního datetime pro porovnání s now
+            const [yy, mm, dd] = day.iso.split('-').map(Number);
+            const cellStart = new Date(yy, mm - 1, dd, hour, minute);
+            const isPast = cellStart < now;
+
+            if (isPast) {
+              html += '<td class="past"></td>';
+              continue;
+            }
+
             let cell = { totalCourts: 0, venues: [] };
             if (fits) cell = bookableAt(day.iso, startMin, durationMin);
 
@@ -399,6 +415,9 @@
         const cell = e.target.closest('td.has');
         if (cell) positionPopover(cell);
       });
+
+      // přerendrovat každou minutu, ať se "past" hranice posouvá v reálném čase
+      setInterval(rerender, 60 * 1000);
     }
 
     if (document.readyState === 'loading') {

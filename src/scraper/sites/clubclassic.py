@@ -4,8 +4,8 @@ import asyncio
 import re
 from datetime import date, datetime, timedelta, timezone
 
-import httpx
 from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright
 
 from ..base import BaseScraper
 from ..models import ScrapeResult, Slot
@@ -14,39 +14,69 @@ BASE = "https://rezervace.clubclassic.cz/"
 DAY_URL = BASE + "index.php?page=day_overview&id=22&date={date}"
 
 TIME_RE = re.compile(r"(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})")
+PARALLELISM = 4   # paralelní záložky v jednom browser contextu
 
 
 class ClubClassicScraper(BaseScraper):
+    """Server-rendered PHP stránka, ale clubclassic.cz odmítá requesty z cloud
+    datacenter IP s 403 (`python-httpx` UA i běžný Chrome UA bez TLS handshake
+    z reálného browseru). Proto Playwright, stejně jako u ostatních zdrojů.
+    """
+
     venue_id = "clubclassic"
     venue_name = "Club Classic"
     venue_url = BASE + "?page=day_overview&id=22"
+    timeout_seconds = 180
 
     async def fetch_window(self, start_date: date, days: int) -> ScrapeResult:
         scraped_at = datetime.now(timezone.utc)
         slots: list[Slot] = []
+        errors: list[str] = []
 
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-            tasks = [self._fetch_day(client, start_date + timedelta(days=i)) for i in range(days)]
-            day_results = await asyncio.gather(*tasks, return_exceptions=True)
+        async with async_playwright() as p:
+            browser = await p.chromium.launch()
+            ctx = await browser.new_context(
+                user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                locale="cs-CZ",
+            )
+            try:
+                sem = asyncio.Semaphore(PARALLELISM)
 
-        for r in day_results:
-            if isinstance(r, Exception):
-                continue
-            slots.extend(r)
+                async def fetch_one(day: date) -> list[Slot] | Exception:
+                    async with sem:
+                        page = await ctx.new_page()
+                        try:
+                            url = DAY_URL.format(date=day.isoformat())
+                            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                            await page.wait_for_selector("table.denni-prehled", timeout=15000)
+                            html = await page.content()
+                            return self._parse_day(html, day)
+                        except Exception as e:
+                            return e
+                        finally:
+                            await page.close()
 
+                day_results = await asyncio.gather(
+                    *(fetch_one(start_date + timedelta(days=i)) for i in range(days))
+                )
+                for r in day_results:
+                    if isinstance(r, Exception):
+                        errors.append(f"{type(r).__name__}: {r}")
+                    else:
+                        slots.extend(r)
+            finally:
+                await browser.close()
+
+        first_error = errors[0] if errors and not slots else None
         return ScrapeResult(
             venue_id=self.venue_id,
             venue_name=self.venue_name,
             venue_url=self.venue_url,
             scraped_at=scraped_at,
             slots=slots,
+            error=first_error,
         )
-
-    async def _fetch_day(self, client: httpx.AsyncClient, day: date) -> list[Slot]:
-        url = DAY_URL.format(date=day.isoformat())
-        resp = await client.get(url)
-        resp.raise_for_status()
-        return self._parse_day(resp.text, day)
 
     def _parse_day(self, html: str, day: date) -> list[Slot]:
         soup = BeautifulSoup(html, "lxml")
@@ -56,8 +86,6 @@ class ClubClassicScraper(BaseScraper):
 
         header_cells = table.find("tr").find_all("th")
         courts = [c.get_text(strip=True) for c in header_cells[1:]]
-
-        # proklik vede vždy jen na denní přehled (rezervační formulář vyžaduje login)
         day_booking_url = DAY_URL.format(date=day.isoformat())
 
         slots: list[Slot] = []

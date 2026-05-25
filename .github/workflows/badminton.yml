@@ -2,7 +2,7 @@ name: scrape-and-deploy
 
 on:
   schedule:
-    - cron: "5,25,45 * * * *"   # každých 20 min, offset od :00 (GH peak load)
+    - cron: "*/15 * * * *"   # každých 15 min — nejpoužívanější pattern, GH ho zaregistruje spolehlivě
   workflow_dispatch:           # manuální spuštění z UI pro testy
   push:
     branches: [main]

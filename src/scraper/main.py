@@ -22,8 +22,10 @@ async def run_all(start_date: date, days: int) -> list:
     log.info("Running %d scrapers for %d days from %s", len(scrapers), days, start_date)
     results = await asyncio.gather(*(s.run(start_date, days) for s in scrapers))
     for r in results:
-        status = "ERROR" if r.error else f"{len(r.slots)} slots"
-        log.info("  %s: %s", r.venue_id, status)
+        if r.error:
+            log.warning("  %s: ERROR — %s", r.venue_id, r.error)
+        else:
+            log.info("  %s: %d slots", r.venue_id, len(r.slots))
     return results
 
 

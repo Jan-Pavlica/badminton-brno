@@ -48,7 +48,10 @@ class ClubClassicScraper(BaseScraper):
                         page = await ctx.new_page()
                         try:
                             url = DAY_URL.format(date=day.isoformat())
-                            await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                            resp = await page.goto(url, wait_until="domcontentloaded", timeout=25000)
+                            status = resp.status if resp else 0
+                            if status >= 400:
+                                return RuntimeError(f"HTTP {status} for {url}")
                             await page.wait_for_selector("table.denni-prehled", timeout=15000)
                             html = await page.content()
                             return self._parse_day(html, day)

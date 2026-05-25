@@ -14,6 +14,8 @@ zobrazují jen jeden týden (memberzone, sportkuklenska), si na další týden s
 | `memberzone` | Sprint Tenis (Badminton hala) | ✅ | Tabulka `tableLekce` vystavuje explicitně dostupné rezervační varianty (čas + kurty); cokoli neuvedené **není** volné |
 | `fit4all` | Fit4All | ✅ | 30min sloty, 4 kurty |
 | `sportkuklenska` | Sport Kuklenská | ✅ | JSF schedule, hodinové sloty, 4 kurty. Rezervace jsou modré `.event` divy nad mřížkou — mapujeme přes překryv bounding boxů |
+| `centrumviktoria` | Centrum Viktoria | ✅ | Java aplikace, 3 kurty, jen explicitně volné sloty (z `<a class="book">` anchorů). Datum přes `?criteriaTimestamp=<ms>` |
+| `badmintonlisen` | Badminton Líšeň | ✅ | Stejná e-rezervace.cz platforma jako Kuklenská, ale 30min granularita a defaultní 1-day view → klikáme šipkou vpravo (1 den/klik) |
 
 ## Lokální spuštění
 

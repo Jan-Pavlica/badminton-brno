@@ -171,7 +171,7 @@
 <body>
   <h1>Badminton Brno — volné kapacity</h1>
   <div class="meta">
-    Aktualizováno {{ scraped_at_human }} · <a href="data/slots.json">JSON</a>
+    Aktualizováno <time id="scraped-at" datetime="{{ scraped_at_iso }}">{{ scraped_at_iso }}</time> · <a href="data/slots.json">JSON</a>
   </div>
 
   <div class="venues" id="venues-filter">
@@ -369,7 +369,18 @@
       });
     }
 
+    function formatLocalTimestamp() {
+      const el = document.getElementById('scraped-at');
+      if (!el) return;
+      const dt = new Date(el.getAttribute('datetime'));
+      if (isNaN(dt.getTime())) return;
+      const pad = n => String(n).padStart(2, '0');
+      el.textContent = `${dt.getDate()}.${dt.getMonth()+1}.${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+      el.title = dt.toString();   // tooltip s plnou TZ kvůli debugu
+    }
+
     function init() {
+      formatLocalTimestamp();
       initVenueFilter();
 
       const buttons = document.querySelectorAll('.duration-toggle .btn');

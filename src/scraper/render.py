@@ -100,9 +100,10 @@ def render(
     )
     template = env.get_template("index.html.j2")
 
-    now_local = datetime.now().astimezone()
+    # UTC ISO čas — JS v prohlížeči ho konvertuje do lokálního time zonu uživatele
+    scraped_at_utc = datetime.now(timezone.utc)
     rendered = template.render(
-        scraped_at_human=now_local.strftime("%-d.%-m.%Y %H:%M"),
+        scraped_at_iso=scraped_at_utc.isoformat(),
         venues_meta=[
             {
                 "venue_id": r.venue_id,

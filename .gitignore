@@ -11,6 +11,7 @@ site/
 .ruff_cache/
 
 .idea/
+*.iml
 .vscode/
 *.swp
 .DS_Store

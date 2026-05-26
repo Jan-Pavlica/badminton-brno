@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Badminton Brno — volné kapacity</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      margin: 0;
+      padding: 1.5rem;
+      background: #f4f5f7;
+      color: #222;
+    }
+    h1 { margin: 0 0 .25rem; font-size: 1.5rem; }
+    h2 { margin: 1.75rem 0 .5rem; font-size: 1rem; color: #555; font-weight: 600; }
+    .meta { color: #666; font-size: .85rem; margin-bottom: 1rem; }
+    .meta a { color: #444; }
+
+    .venues { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; align-items: center; }
+    .venues .label { color: #555; font-size: .85rem; }
+    .venue-pill {
+      padding: .25rem .65rem;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid #1a5f1a;
+      font-size: .85rem;
+      cursor: pointer;
+      user-select: none;
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      color: #1a5f1a;
+      font-weight: 600;
+    }
+    .venue-pill:hover { background: #f3faf3; }
+    .venue-pill.disabled {
+      background: #f0f0f0;
+      border-color: #ccc;
+      color: #888;
+      font-weight: normal;
+    }
+    .venue-pill.disabled:hover { background: #e8e8e8; }
+    .venue-pill.disabled .pill-check::before { content: '○'; }
+    .venue-pill .pill-check::before { content: '●'; }
+    .venue-pill .pill-check { font-size: .7rem; }
+    .venue-pill.error { background: #fee; border-color: #f99; color: #900; }
+    .venue-pill.error.disabled { background: #f5e8e8; color: #b66; }
+    .pill-link {
+      color: inherit;
+      opacity: .55;
+      text-decoration: none;
+      font-size: .9em;
+      margin-left: .2rem;
+    }
+    .pill-link:hover { opacity: 1; }
+
+    .duration-toggle {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+      font-size: .85rem;
+    }
+    .duration-toggle .label { color: #555; }
+    .duration-toggle .btn {
+      padding: .35rem .85rem;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: .85rem;
+      color: #333;
+    }
+    .duration-toggle .btn:hover { background: #f0f0f0; }
+    .duration-toggle .btn.active {
+      background: #1a5f1a;
+      border-color: #1a5f1a;
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .week-table {
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 1100px;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+    .week-table th,
+    .week-table td {
+      border: 1px solid #d8d8d8;
+      padding: 4px 6px;
+      text-align: center;
+      height: 26px;
+      font-size: .85rem;
+    }
+    .week-table thead th {
+      background: #eef0f3;
+      font-weight: 600;
+      padding: 8px 6px;
+    }
+    .week-table thead th small { color: #777; font-weight: normal; }
+    .week-table tbody th.time {
+      background: #fafbfc;
+      color: #666;
+      font-weight: normal;
+      font-variant-numeric: tabular-nums;
+      width: 70px;
+      font-size: .8rem;
+    }
+    .week-table tbody tr.hour-mark th,
+    .week-table tbody tr.hour-mark td {
+      border-top: 2px solid #c8c8c8;
+    }
+
+    .week-table td.has {
+      background: #d8f0d8;
+      position: relative;
+      cursor: default;
+      font-weight: 600;
+      color: #1a5f1a;
+    }
+    .week-table td.has:hover { background: #b8e6b8; }
+    .week-table td.none { background: #fadcdc; }
+    .week-table td.past {
+      background: #ececec;
+      color: #b0b0b0;
+      cursor: default;
+    }
+
+    .popover {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #fff;
+      border: 1px solid #888;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.18);
+      padding: .55rem .75rem;
+      z-index: 50;
+      white-space: normal;          /* dlouhé záznamy zalomit */
+      text-align: left;
+      font-weight: normal;
+      color: #222;
+      font-size: .85rem;
+      width: max-content;           /* drží těsně podle obsahu */
+      max-width: 320px;
+    }
+    .week-table td.has:hover .popover { display: block; }
+    .popover-title {
+      font-weight: 600;
+      margin-bottom: .35rem;
+      color: #444;
+      font-size: .8rem;
+      white-space: nowrap;
+    }
+    .popover-line { margin: .2rem 0; line-height: 1.4; }
+    .popover-line a { color: #0a66cc; text-decoration: none; font-weight: 600; }
+    .popover-line a:hover { text-decoration: underline; }
+    .popover-courts { color: #555; }
+
+    /* JS po :hover doplní třídy, aby popover nepřetekl viewport */
+    .popover.shift-left  { left: auto; right: 0;    transform: none; }
+    .popover.shift-right { left: 0;    right: auto; transform: none; }
+    .popover.flip-up     { top: auto;  bottom: 100%; }
+
+    .table-wrap { padding-bottom: 320px; }
+
+    footer { margin-top: 2rem; color: #888; font-size: .75rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <h1>Badminton Brno — volné kapacity</h1>
+  <div class="meta">
+    Aktualizováno <time id="scraped-at" datetime="2026-05-26T09:01:29.701311+00:00">2026-05-26T09:01:29.701311+00:00</time> · <a href="data/slots.json">JSON</a>
+  </div>
+
+  <div class="venues" id="venues-filter">
+    <span class="label">Sportoviště:</span>
+    
+      <span class="venue-pill error"
+            data-venue-name="Club Classic"
+            title="RuntimeError: HTTP 403 for https://rezervace.clubclassic.cz/index.php?page=day_overview&id=22&date=2026-05-26">
+        <span class="pill-check" aria-hidden="true"></span>
+        <span class="pill-name">Club Classic</span>
+        <span aria-label="chyba">⚠</span>
+        <a class="pill-link" href="https://rezervace.clubclassic.cz/?page=day_overview&id=22" target="_blank" rel="noopener noreferrer"
+           title="Otevřít stránku sportoviště">↗</a>
+      </span>
+    
+      <span class="venue-pill "
+            data-venue-name="Sprint Tenis (Badminton hala)"
+            title="Klikni pro zobrazení/skrytí ve filtru">
+        <span class="pill-check" aria-hidden="true"></span>
+        <span class="pill-name">Sprint Tenis (Badminton hala)</span>
+        
+        <a class="pill-link" href="https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3&NAZEV=Badminton%20hala" target="_blank" rel="noopener noreferrer"
+           title="Otevřít stránku sportoviště">↗</a>
+      </span>
+    
+      <span class="venue-pill "
+            data-venue-name="Fit4All"
+            title="Klikni pro zobrazení/skrytí ve filtru">
+        <span class="pill-check" aria-hidden="true"></span>
+        <span class="pill-name">Fit4All</span>
+        
+        <a class="pill-link" href="https://www.fit4all.cz/cs/online-rezervace?activity=6" target="_blank" rel="noopener noreferrer"
+           title="Otevřít stránku sportoviště">↗</a>
+      </span>
+    
+      <span class="venue-pill "
+            data-venue-name="Sport Kuklenská"
+            title="Klikni pro zobrazení/skrytí ve filtru">
+        <span class="pill-check" aria-hidden="true"></span>
+        <span class="pill-name">Sport Kuklenská</span>
+        
+        <a class="pill-link" href="https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces" target="_blank" rel="noopener noreferrer"
+           title="Otevřít stránku sportoviště">↗</a>
+      </span>
+    
+      <span class="venue-pill "
+            data-venue-name="Centrum Viktoria"
+            title="Klikni pro zobrazení/skrytí ve filtru">
+        <span class="pill-check" aria-hidden="true"></span>
+        <span class="pill-name">Centrum Viktoria</span>
+        
+        <a class="pill-link" href="https://rezervace.centrumviktoria.cz:18443/timeline/day" target="_blank" rel="noopener noreferrer"
+           title="Otevřít stránku sportoviště">↗</a>
+      </span>
+    
+      <span class="venue-pill "
+            data-venue-name="Badminton Líšeň"
+            title="Klikni pro zobrazení/skrytí ve filtru">
+        <span class="pill-check" aria-hidden="true"></span>
+        <span class="pill-name">Badminton Líšeň</span>
+        
+        <a class="pill-link" href="https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces" target="_blank" rel="noopener noreferrer"
+           title="Otevřít stránku sportoviště">↗</a>
+      </span>
+    
+  </div>
+
+  <div class="duration-toggle" role="radiogroup" aria-label="Délka rezervace">
+    <span class="label">Délka rezervace:</span>
+    <button type="button" class="btn" data-duration="30">30 min</button>
+    <button type="button" class="btn active" data-duration="60">60 min</button>
+    <button type="button" class="btn" data-duration="90">90 min</button>
+    <button type="button" class="btn" data-duration="120">120 min</button>
+  </div>
+
+  <div class="table-wrap" id="weeks-container"></div>
+
+  <footer>
+    Najetím na zelenou buňku zobrazíte volné kurty a proklik na rezervaci.
+  </footer>
+
+  <script>
+    const AVAILABILITY = {"2026-05-26": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 780, 810, 840, 870, 1110, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1170, 1260, 1290], "Kurt 5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1110, 1260, 1290], "Kurt 2": [690, 720, 750, 780, 810, 840, 870, 900, 930, 960], "Kurt 3": [720, 750, 810, 900, 930, 960, 1230, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1779796800000"}, "Fit4All": {"courts": {"Badminton KURT 1": [480, 510, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Badminton KURT 2": [480, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1170, 1260, 1290], "Badminton KURT 3": [420, 450, 480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1290], "Badminton KURT 4": [480, 510, 540, 570, 690, 720, 750, 780, 810, 840, 870, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-05-26"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 900, 930, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 780, 810, 900, 930, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 720, 750, 780, 810, 840, 870, 1260, 1290]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [690, 720, 750, 780, 810, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.2": [690, 720, 750, 780, 1260, 1290], "Badminton kurt \u010d.3": [690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1260, 1290], "Badminton kurt \u010d.4": [690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Badminton kurt \u010d.5": [690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Badminton kurt \u010d.6": [690, 720, 750, 780, 810, 840, 870, 1200, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-05-27": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 5": [420, 450, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [540, 570, 600, 630, 660, 690, 720, 750, 840, 870, 900, 1260, 1290], "Kurt 2": [540, 570, 600, 630, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Kurt 3": [420, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1779883200000"}, "Fit4All": {"courts": {"Badminton KURT 1": [480, 510, 720, 750, 780, 810, 840, 870, 1020, 1260, 1290], "Badminton KURT 2": [420, 450, 480, 570, 720, 750, 780, 810, 840, 870, 1230, 1260, 1290], "Badminton KURT 3": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1020, 1260, 1290], "Badminton KURT 4": [540, 570, 720, 750, 870, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-05-27"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [480, 510, 540, 570, 600, 630, 780, 810, 840, 870], "Kurt 2": [480, 510, 540, 570, 600, 630, 780, 810, 840, 870], "Kurt 3": [480, 510, 540, 570, 600, 630, 780, 810, 840, 870, 1260, 1290], "Kurt 4": [480, 510, 600, 630, 780, 810, 840, 870]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [420, 450, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1020, 1050, 1260, 1290], "Badminton kurt \u010d.2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1140, 1170, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900], "Badminton kurt \u010d.4": [540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.5": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.6": [510, 540, 570, 600, 630, 750, 780, 810, 840, 870, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-05-28": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 6": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1050, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1779969600000"}, "Fit4All": {"courts": {"Badminton KURT 1": [480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Badminton KURT 2": [540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 3": [420, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Badminton KURT 4": [510, 540, 570, 630, 720, 750, 780, 810, 840, 870, 1200, 1230, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-05-28"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [600, 630, 660, 690, 720, 750, 780, 810, 1260, 1290], "Kurt 2": [600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 3": [480, 510, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 4": [600, 630, 660, 690, 720, 750, 780, 810, 1260, 1290]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 930, 960, 990, 1200, 1230], "Badminton kurt \u010d.2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 1260, 1290], "Badminton kurt \u010d.3": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1020, 1050, 1260, 1290], "Badminton kurt \u010d.4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Badminton kurt \u010d.5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870], "Badminton kurt \u010d.6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-05-29": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1020, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1020, 1050, 1200, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1110, 1200, 1230, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 5": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 900, 930, 960, 990, 1110, 1200, 1230, 1260, 1290], "Kurt 6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 750, 900, 930, 1110, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780056000000"}, "Fit4All": {"courts": {"Badminton KURT 1": [480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 900, 930, 960, 990, 1200, 1230, 1260, 1290], "Badminton KURT 2": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 3": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1020, 1050, 1080, 1110, 1200, 1230, 1260, 1290], "Badminton KURT 4": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 960, 990, 1020, 1050, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-05-29"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 900, 930, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870], "Kurt 4": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.2": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 810, 840, 870, 900, 930, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.5": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.6": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 900, 930, 960, 990, 1170, 1200, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-05-30": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 990, 1020, 1050], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110], "Kurt 4": [480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110], "Kurt 5": [480, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110], "Kurt 6": [480, 510, 540, 570, 660, 690, 720, 750, 840, 870, 960, 990, 1080, 1110]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [480, 510, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 2": [480, 510, 600, 690, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780142400000"}, "Fit4All": {"courts": {"Badminton KURT 1": [540, 570, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 2": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 3": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 4": [480, 510, 540, 570, 750, 780, 810, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-05-30"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [900, 930, 960, 990, 1020, 1050, 1140, 1170, 1200, 1230], "Kurt 2": [900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230], "Kurt 3": [480, 510, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230], "Kurt 4": [480, 510, 540, 570, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}}, "2026-05-31": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1200, 1230, 1260, 1290], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230, 1260, 1290], "Kurt 4": [480, 510, 540, 570, 600, 630, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1200, 1230, 1260, 1290], "Kurt 5": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230, 1260, 1290], "Kurt 6": [480, 510, 540, 570, 600, 630, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 2": [480, 510, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1200, 1230, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780228800000"}, "Fit4All": {"courts": {"Badminton KURT 1": [480, 510, 540, 570, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1230, 1260, 1290], "Badminton KURT 2": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 870, 900, 930, 960, 1050, 1080, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 3": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 4": [510, 540, 570, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1200, 1230, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-05-31"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [480, 510, 720, 750, 780, 810, 840, 870, 900, 930, 1020, 1050], "Kurt 2": [720, 750, 780, 810, 840, 870, 900, 930, 1020, 1050, 1200, 1230], "Kurt 3": [480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1200, 1230], "Kurt 4": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.5": [420, 450, 480, 510, 540, 570, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.6": [420, 450, 480, 510, 540, 570, 600, 630, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1200, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-06-01": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 900, 930, 1200, 1230, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1260, 1290], "Kurt 5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1260, 1290], "Kurt 6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1020, 1050, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780315200000"}, "Fit4All": {"courts": {"Badminton KURT 1": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1140, 1170, 1260, 1290], "Badminton KURT 2": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1080, 1110, 1260, 1290], "Badminton KURT 3": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1230, 1260, 1290], "Badminton KURT 4": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-06-01"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 2": [540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 4": [420, 450, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960], "Badminton kurt \u010d.2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1260, 1290], "Badminton kurt \u010d.4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Badminton kurt \u010d.5": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Badminton kurt \u010d.6": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1200, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-06-02": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1110, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1110, 1260, 1290], "Kurt 5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1050, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [420, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 960, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1230, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780401600000"}, "Fit4All": {"courts": {"Badminton KURT 1": [420, 450, 480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Badminton KURT 2": [420, 450, 480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1020, 1050, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 3": [420, 450, 480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1020, 1050, 1230, 1260, 1290], "Badminton KURT 4": [420, 450, 480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1170, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-06-02"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 4": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [480, 510, 600, 630, 660, 690, 720, 750, 780, 810, 1230, 1260, 1290], "Badminton kurt \u010d.2": [540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 1140, 1170, 1260, 1290], "Badminton kurt \u010d.3": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1260, 1290], "Badminton kurt \u010d.4": [540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.5": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.6": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1200, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-06-03": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1200, 1230, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1140, 1170, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780488000000"}, "Fit4All": {"courts": {"Badminton KURT 1": [420, 450, 480, 510, 720, 750, 780, 810, 840, 870, 1200, 1230, 1260, 1290], "Badminton KURT 2": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1200, 1230, 1260, 1290], "Badminton KURT 3": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 4": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1080, 1110, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-06-03"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1200, 1230, 1260, 1290], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930], "Kurt 4": [600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Badminton kurt \u010d.2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900], "Badminton kurt \u010d.4": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.5": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.6": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-06-04": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1200, 1230, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1200, 1230, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1200, 1230, 1260, 1290], "Kurt 5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1200, 1230, 1260, 1290], "Kurt 6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1050, 1200, 1230, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1020, 1050, 1200, 1230, 1260, 1290], "Kurt 2": [540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 1080, 1110, 1200, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780574400000"}, "Fit4All": {"courts": {"Badminton KURT 1": [420, 450, 480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Badminton KURT 2": [420, 450, 480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1230, 1260, 1290], "Badminton KURT 3": [420, 450, 480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1200, 1230, 1260, 1290], "Badminton KURT 4": [420, 450, 480, 510, 540, 570, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1200, 1230, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-06-04"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [420, 450, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 4": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840], "Badminton kurt \u010d.2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 1080, 1110, 1140, 1170, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1080, 1110, 1260, 1290], "Badminton kurt \u010d.5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870], "Badminton kurt \u010d.6": [420, 450, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-06-05": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1020, 1050, 1080, 1110, 1200, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 900, 930, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1170, 1200, 1230, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1170, 1200, 1230, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780660800000"}, "Fit4All": {"courts": {"Badminton KURT 1": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 2": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 3": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1200, 1230, 1260, 1290], "Badminton KURT 4": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-06-05"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930], "Kurt 4": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1080, 1110, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.5": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.6": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1170, 1200, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-06-06": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 4": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 5": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 6": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [480, 510, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 2": [480, 510, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780747200000"}, "Fit4All": {"courts": {"Badminton KURT 1": [540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 2": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 3": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 4": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-06-06"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [840, 870, 900, 930, 1140, 1170, 1200, 1230], "Kurt 2": [840, 870, 900, 930, 1140, 1170, 1200, 1230], "Kurt 3": [840, 870, 900, 930, 1140, 1170, 1200, 1230], "Kurt 4": [840, 870, 900, 930, 1140, 1170, 1200, 1230]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-06-07": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1200, 1230, 1260, 1290], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230, 1260, 1290], "Kurt 4": [480, 510, 540, 570, 600, 630, 720, 750, 780, 810, 840, 870, 900, 1020, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 5": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1020, 1200, 1230, 1260, 1290], "Kurt 6": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1020, 1200, 1230, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780833600000"}, "Fit4All": {"courts": {"Badminton KURT 1": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 2": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1200, 1230, 1260, 1290], "Badminton KURT 3": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290], "Badminton KURT 4": [480, 510, 540, 570, 600, 630, 660, 690, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-06-07"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [480, 510, 840, 870, 900, 930, 960, 990, 1020, 1050], "Kurt 2": [480, 510, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230], "Kurt 3": [480, 510, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230], "Kurt 4": [480, 510, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1200, 1230, 1260, 1290], "Badminton kurt \u010d.6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1020, 1050, 1080, 1110, 1200, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}, "2026-06-08": {"Badminton L\u00ed\u0161e\u0148": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1260, 1290], "Kurt 5": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Kurt 6": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290]}, "url": "https://badmintonlisen.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Centrum Viktoria": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1260, 1290], "Kurt 2": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 1290]}, "url": "https://rezervace.centrumviktoria.cz:18443/timeline/day?criteriaTimestamp=1780920000000"}, "Fit4All": {"courts": {"Badminton KURT 1": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1140, 1170, 1260, 1290], "Badminton KURT 2": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1080, 1110, 1260, 1290], "Badminton KURT 3": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 1080, 1110, 1230, 1260, 1290], "Badminton KURT 4": [420, 450, 480, 510, 540, 570, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1050, 1260, 1290]}, "url": "https://www.fit4all.cz/cs/online-rezervace?activity=6\u0026date=2026-06-08"}, "Sport Kuklensk\u00e1": {"courts": {"Kurt 1": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 960, 990, 1260, 1290], "Kurt 2": [420, 450, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 990, 1260, 1290], "Kurt 3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290], "Kurt 4": [420, 450, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 1140, 1170, 1200, 1230, 1260, 1290]}, "url": "https://sportkuklenska.e-rezervace.cz/Branch/pages/Schedule.faces"}, "Sprint Tenis (Badminton hala)": {"courts": {"Badminton kurt \u010d.1": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1080, 1110], "Badminton kurt \u010d.2": [480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1260, 1290], "Badminton kurt \u010d.3": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 930, 960, 1260, 1290], "Badminton kurt \u010d.4": [420, 450, 480, 510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Badminton kurt \u010d.5": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1260, 1290], "Badminton kurt \u010d.6": [510, 540, 570, 600, 630, 660, 690, 720, 750, 780, 810, 840, 870, 900, 1200, 1230, 1260, 1290]}, "url": "https://memberzone.cz/sprint_tenis/Sportoviste.aspx?ID_Sportoviste=3\u0026NAZEV=Badminton%20hala"}}};
+    const WEEKS = [[{"full": "26.5.2026", "iso": "2026-05-26", "short": "26.5.", "weekday": "\u00dat"}, {"full": "27.5.2026", "iso": "2026-05-27", "short": "27.5.", "weekday": "St"}, {"full": "28.5.2026", "iso": "2026-05-28", "short": "28.5.", "weekday": "\u010ct"}, {"full": "29.5.2026", "iso": "2026-05-29", "short": "29.5.", "weekday": "P\u00e1"}, {"full": "30.5.2026", "iso": "2026-05-30", "short": "30.5.", "weekday": "So"}, {"full": "31.5.2026", "iso": "2026-05-31", "short": "31.5.", "weekday": "Ne"}, {"full": "1.6.2026", "iso": "2026-06-01", "short": "1.6.", "weekday": "Po"}], [{"full": "2.6.2026", "iso": "2026-06-02", "short": "2.6.", "weekday": "\u00dat"}, {"full": "3.6.2026", "iso": "2026-06-03", "short": "3.6.", "weekday": "St"}, {"full": "4.6.2026", "iso": "2026-06-04", "short": "4.6.", "weekday": "\u010ct"}, {"full": "5.6.2026", "iso": "2026-06-05", "short": "5.6.", "weekday": "P\u00e1"}, {"full": "6.6.2026", "iso": "2026-06-06", "short": "6.6.", "weekday": "So"}, {"full": "7.6.2026", "iso": "2026-06-07", "short": "7.6.", "weekday": "Ne"}, {"full": "8.6.2026", "iso": "2026-06-08", "short": "8.6.", "weekday": "Po"}]];
+    const DAY_START_HOUR = 7;
+    const DAY_END_HOUR = 22;
+    const SLOT_MINUTES = 30;
+    const CLOSE_MINUTE = DAY_END_HOUR * 60;
+    const STORAGE_KEY = 'badminton-brno:disabledVenues';
+    const SELECTED_VENUES = new Set();   // venue_name, pouze aktivní
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, c => (
+        {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+      ));
+    }
+
+    function bookableAt(dayIso, startMin, durationMin) {
+      // pro každé (venue, kurt) zjisti, jestli má volné všechny 30min sloty
+      // v intervalu [startMin, startMin+durationMin)
+      const required = [];
+      for (let m = startMin; m < startMin + durationMin; m += SLOT_MINUTES) {
+        required.push(m);
+      }
+      const dayData = AVAILABILITY[dayIso] || {};
+      const venues = [];
+      let totalCourts = 0;
+      const venueNames = Object.keys(dayData).filter(n => SELECTED_VENUES.has(n)).sort();
+      for (const name of venueNames) {
+        const v = dayData[name];
+        const bookable = [];
+        for (const court of Object.keys(v.courts)) {
+          const set = new Set(v.courts[court]);
+          let ok = true;
+          for (const m of required) {
+            if (!set.has(m)) { ok = false; break; }
+          }
+          if (ok) bookable.push(court);
+        }
+        if (bookable.length) {
+          venues.push({ name, courts: bookable, url: v.url });
+          totalCourts += bookable.length;
+        }
+      }
+      return { totalCourts, venues };
+    }
+
+    function renderWeek(weekDays, durationMin) {
+      const now = new Date();
+      let html = '';
+      html += '<h2>' + esc(weekDays[0].full) + ' – ' + esc(weekDays[weekDays.length-1].full) + '</h2>';
+      html += '<table class="week-table"><thead><tr><th></th>';
+      for (const day of weekDays) {
+        html += '<th>' + esc(day.weekday) + '<br><small>' + esc(day.short) + '</small></th>';
+      }
+      html += '</tr></thead><tbody>';
+
+      for (let hour = DAY_START_HOUR; hour < DAY_END_HOUR; hour++) {
+        for (const minute of [0, 30]) {
+          const startMin = hour * 60 + minute;
+          const label = String(hour).padStart(2,'0') + ':' + String(minute).padStart(2,'0');
+          const isHourMark = (minute === 0);
+          html += '<tr' + (isHourMark ? ' class="hour-mark"' : '') + '>';
+          html += '<th class="time">' + label + '</th>';
+
+          // pokud by booking přesáhl zavírací dobu, vždy red
+          const fits = (startMin + durationMin <= CLOSE_MINUTE);
+
+          for (const day of weekDays) {
+            // konstrukt lokálního datetime pro porovnání s now
+            const [yy, mm, dd] = day.iso.split('-').map(Number);
+            const cellStart = new Date(yy, mm - 1, dd, hour, minute);
+            const isPast = cellStart < now;
+
+            if (isPast) {
+              html += '<td class="past"></td>';
+              continue;
+            }
+
+            let cell = { totalCourts: 0, venues: [] };
+            if (fits) cell = bookableAt(day.iso, startMin, durationMin);
+
+            if (cell.totalCourts > 0) {
+              const endMin = startMin + durationMin;
+              const endLabel = String(Math.floor(endMin/60)).padStart(2,'0') + ':' + String(endMin%60).padStart(2,'0');
+              html += '<td class="has">' + cell.totalCourts;
+              html += '<div class="popover">';
+              html += '<div class="popover-title">' + esc(day.weekday) + ' ' + esc(day.full) + ' · ' + label + '–' + endLabel + '</div>';
+              for (const v of cell.venues) {
+                html += '<div class="popover-line">';
+                html += '<a href="' + esc(v.url) + '" target="_blank" rel="noopener noreferrer">' + esc(v.name) + '</a>';
+                html += '<span class="popover-courts"> — ' + esc(v.courts.join(', ')) + '</span>';
+                html += '</div>';
+              }
+              html += '</div></td>';
+            } else {
+              html += '<td class="none"></td>';
+            }
+          }
+          html += '</tr>';
+        }
+      }
+      html += '</tbody></table>';
+      return html;
+    }
+
+    function render(durationMin) {
+      const container = document.getElementById('weeks-container');
+      let html = '';
+      for (const weekDays of WEEKS) {
+        html += renderWeek(weekDays, durationMin);
+      }
+      container.innerHTML = html;
+    }
+
+    function positionPopover(cell) {
+      if (cell._positioned) return;
+      const popover = cell.querySelector('.popover');
+      if (!popover) return;
+      popover.classList.remove('shift-left', 'shift-right', 'flip-up');
+      void popover.offsetWidth;   // force reflow s default pozicí
+      const r = popover.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const pad = 8;
+      if (r.right > vw - pad) popover.classList.add('shift-left');
+      else if (r.left < pad) popover.classList.add('shift-right');
+      // přeměřit po horizontálním posunu — výška se nemění, ale je-li blízko paty obrazovky, flipnout nahoru
+      const r2 = popover.getBoundingClientRect();
+      if (r2.bottom > vh - pad) popover.classList.add('flip-up');
+      cell._positioned = true;
+    }
+
+    function loadDisabledVenues() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return new Set();
+        const arr = JSON.parse(raw);
+        return new Set(Array.isArray(arr) ? arr : []);
+      } catch (e) {
+        return new Set();
+      }
+    }
+    function saveDisabledVenues(disabled) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...disabled])); }
+      catch (e) { /* ignore (private mode, etc.) */ }
+    }
+
+    function rerender() {
+      const active = document.querySelector('.duration-toggle .btn.active');
+      render(parseInt(active.dataset.duration, 10));
+    }
+
+    function initVenueFilter() {
+      const pills = document.querySelectorAll('#venues-filter .venue-pill');
+      const disabled = loadDisabledVenues();
+      pills.forEach(pill => {
+        const name = pill.dataset.venueName;
+        if (disabled.has(name)) pill.classList.add('disabled');
+        else SELECTED_VENUES.add(name);
+
+        pill.addEventListener('click', (e) => {
+          // klik na ↗ link nesmí togglovat filtr
+          if (e.target.closest('.pill-link')) return;
+          pill.classList.toggle('disabled');
+          if (pill.classList.contains('disabled')) {
+            SELECTED_VENUES.delete(name);
+            disabled.add(name);
+          } else {
+            SELECTED_VENUES.add(name);
+            disabled.delete(name);
+          }
+          saveDisabledVenues(disabled);
+          rerender();
+        });
+      });
+    }
+
+    function formatLocalTimestamp() {
+      const el = document.getElementById('scraped-at');
+      if (!el) return;
+      const dt = new Date(el.getAttribute('datetime'));
+      if (isNaN(dt.getTime())) return;
+      const pad = n => String(n).padStart(2, '0');
+      el.textContent = `${dt.getDate()}.${dt.getMonth()+1}.${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+      el.title = dt.toString();   // tooltip s plnou TZ kvůli debugu
+    }
+
+    function init() {
+      formatLocalTimestamp();
+      initVenueFilter();
+
+      const buttons = document.querySelectorAll('.duration-toggle .btn');
+      buttons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          buttons.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          rerender();
+        });
+      });
+      rerender();
+
+      // dynamické pozicování popoveru po každém hoveru
+      const container = document.getElementById('weeks-container');
+      container.addEventListener('mouseover', (e) => {
+        const cell = e.target.closest('td.has');
+        if (cell) positionPopover(cell);
+      });
+
+      // přerendrovat každou minutu, ať se "past" hranice posouvá v reálném čase
+      setInterval(rerender, 60 * 1000);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  </script>
+</body>
+</html>

@@ -1,57 +1,88 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 from datetime import date, datetime, timedelta, timezone
 
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
+from playwright.async_api import BrowserContext, async_playwright
 
 from ..base import BaseScraper
 from ..models import ScrapeResult, Slot
 
+log = logging.getLogger(__name__)
+
 BASE_URL = "https://www.fit4all.cz/cs/online-rezervace?activity=6&date={date}"
 PUBLIC_URL = "https://www.fit4all.cz/cs/online-rezervace?activity=6"
 TIME_RE = re.compile(r"(\d{1,2}):(\d{2})")
+MAX_RETRIES = 3
 
 
 class Fit4AllScraper(BaseScraper):
     venue_id = "fit4all"
     venue_name = "Fit4All"
     venue_url = PUBLIC_URL
-    timeout_seconds = 180  # 14 page loads × ~3s + rezerva
+    timeout_seconds = 240   # 14 dnů × retry budget
 
     async def fetch_window(self, start_date: date, days: int) -> ScrapeResult:
         scraped_at = datetime.now(timezone.utc)
         slots: list[Slot] = []
+        errors: list[str] = []
 
         async with async_playwright() as p:
             browser = await p.chromium.launch()
             ctx = await browser.new_context(
-                user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                user_agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 locale="cs-CZ",
             )
             try:
                 for i in range(days):
                     day = start_date + timedelta(days=i)
-                    page = await ctx.new_page()
                     try:
-                        url = BASE_URL.format(date=day.isoformat())
-                        await page.goto(url, wait_until="networkidle", timeout=20000)
-                        await page.wait_for_selector(".court-cell", timeout=10000)
-                        html = await page.content()
-                        slots.extend(self._parse(html, day, url))
-                    finally:
-                        await page.close()
+                        day_slots = await self._fetch_day_with_retry(ctx, day)
+                        slots.extend(day_slots)
+                    except Exception as e:
+                        errors.append(f"{day}: {type(e).__name__}: {e}")
+                        log.warning("fit4all %s skipped after retries: %s", day, e)
             finally:
                 await browser.close()
 
+        first_error = errors[0] if errors and not slots else None
         return ScrapeResult(
             venue_id=self.venue_id,
             venue_name=self.venue_name,
             venue_url=self.venue_url,
             scraped_at=scraped_at,
             slots=slots,
+            error=first_error,
         )
+
+    async def _fetch_day_with_retry(self, ctx: BrowserContext, day: date) -> list[Slot]:
+        last_exc: Exception | None = None
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                return await self._fetch_day(ctx, day)
+            except Exception as e:
+                last_exc = e
+                log.warning("fit4all %s attempt %d failed: %s", day, attempt, e)
+                if attempt < MAX_RETRIES:
+                    await asyncio.sleep(2)
+        raise last_exc or RuntimeError("unknown")
+
+    async def _fetch_day(self, ctx: BrowserContext, day: date) -> list[Slot]:
+        page = await ctx.new_page()
+        try:
+            url = BASE_URL.format(date=day.isoformat())
+            # `domcontentloaded` místo `networkidle` — fit4all má dlouhé background
+            # tracking requesty, networkidle nikdy nezavolá na pomalých runnerech.
+            await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            await page.wait_for_selector(".court-cell", timeout=15000)
+            html = await page.content()
+            return self._parse(html, day, url)
+        finally:
+            await page.close()
 
     def _parse(self, html: str, day: date, page_url: str) -> list[Slot]:
         soup = BeautifulSoup(html, "lxml")

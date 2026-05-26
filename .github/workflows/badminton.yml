@@ -11,11 +11,6 @@ on:
       - "templates/**"
       - ".github/workflows/badminton.yml"
 
-# Pouze jeden běh najednou — když cron přijde dřív, než předchozí dojede, počká
-concurrency:
-  group: scrape
-  cancel-in-progress: false
-
 permissions:
   contents: write   # potřeba pro gh-pages push
 
